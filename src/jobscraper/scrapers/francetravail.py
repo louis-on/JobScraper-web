@@ -4,8 +4,9 @@ import re
 import time
 from datetime import datetime, timedelta
 from typing import Dict, Iterator, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin
 
+import requests
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -44,6 +45,19 @@ class FranceTravailScraper(BaseScraper):
         """
         super().__init__(config)
         self.delay_between_requests = config.get("delay", 2) if config else 2
+        # Session persistante : la pagination France Travail (« Afficher les
+        # 20 offres suivantes ») est un événement d'une application à état
+        # (Tapestry) qui s'appuie sur le cookie de session posé à la 1re requête.
+        # BaseScraper.close() fermera cette session.
+        self._session = requests.Session()
+
+    def _get_html(self, url: str) -> str:
+        """Récupère une page via la session (cookies conservés entre pages)."""
+        if self._session is None:  # session fermée puis scraper réutilisé
+            self._session = requests.Session()
+        response = self._session.get(url, headers=self._get_headers(), timeout=30)
+        response.raise_for_status()
+        return response.text
 
     def _get_headers(self) -> dict:
         """Headers HTTP pour France Travail."""
@@ -69,20 +83,23 @@ class FranceTravailScraper(BaseScraper):
         Yields:
             JobOffer: Les offres d'emploi trouvées
         """
-        url = self._build_search_url(criteria)
-        logger.info(f"Recherche France Travail: {url}")
+        next_url: Optional[str] = self._build_search_url(criteria)
+        logger.info(f"Recherche France Travail: {next_url}")
 
-        page = 1
         jobs_found = 0
         max_results = criteria.max_results
         seen_ids: set = set()
 
-        while jobs_found < max_results:
-            page_url = f"{url}&page={page}" if page > 1 else url
-            logger.debug(f"Récupération page {page}: {page_url}")
+        # France Travail affiche 20 offres par page et pagine via un lien
+        # « Afficher les 20 offres suivantes » (...:afficherplusderesultats/20-39/0).
+        # L'ancien code ajoutait &page=N, paramètre ignoré par le site : la
+        # « page 2 » était identique à la page 1, tout était dédupliqué et la
+        # recherche s'arrêtait donc à 20 offres. On suit désormais le vrai lien.
+        while jobs_found < max_results and next_url:
+            logger.debug(f"Récupération: {next_url}")
 
             try:
-                html = self._fetch_page(page_url)
+                html = self._get_html(next_url)
                 soup = BeautifulSoup(html, "lxml")
 
                 job_cards = self._extract_job_cards(soup)
@@ -106,18 +123,29 @@ class FranceTravailScraper(BaseScraper):
                         new_jobs_on_page += 1
                         yield job
 
+                # La page « afficher plus » peut contenir le cumul des offres
+                # déjà chargées : on ne s'arrête que si rien de neuf n'arrive
+                # (les doublons sont écartés par seen_ids ci-dessus).
                 if new_jobs_on_page == 0:
                     logger.info("Plus de nouvelles offres")
                     break
 
-                page += 1
-                time.sleep(self.delay_between_requests)
+                next_url = self._extract_next_page_url(soup)
+                if next_url:
+                    time.sleep(self.delay_between_requests)
 
             except Exception as e:
                 logger.error(f"Erreur lors de la recherche: {e}")
                 break
 
         logger.info(f"Recherche terminée: {jobs_found} offres uniques trouvées")
+
+    def _extract_next_page_url(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extrait l'URL « Afficher les 20 offres suivantes », si présente."""
+        link = soup.select_one("a[href*='afficherplusderesultats']")
+        if link and link.get("href"):
+            return urljoin(self.base_url, link["href"])
+        return None
 
     def get_job_details(self, job_id: str) -> Optional[JobOffer]:
         """
@@ -275,7 +303,9 @@ class FranceTravailScraper(BaseScraper):
 
             # Description
             description_elem = card.select_one("p.description")
-            description = description_elem.get_text(strip=True) if description_elem else None
+            description = (
+                description_elem.get_text(strip=True) if description_elem else None
+            )
 
             # Type de contrat
             contract_type = None
@@ -332,11 +362,20 @@ class FranceTravailScraper(BaseScraper):
         text_lower = text.lower()
 
         patterns = [
-            (r"il y a (\d+)\s*minute", lambda m: now - timedelta(minutes=int(m.group(1)))),
+            (
+                r"il y a (\d+)\s*minute",
+                lambda m: now - timedelta(minutes=int(m.group(1))),
+            ),
             (r"il y a (\d+)\s*heure", lambda m: now - timedelta(hours=int(m.group(1)))),
             (r"il y a (\d+)\s*jour", lambda m: now - timedelta(days=int(m.group(1)))),
-            (r"il y a (\d+)\s*semaine", lambda m: now - timedelta(weeks=int(m.group(1)))),
-            (r"il y a (\d+)\s*mois", lambda m: now - timedelta(days=int(m.group(1)) * 30)),
+            (
+                r"il y a (\d+)\s*semaine",
+                lambda m: now - timedelta(weeks=int(m.group(1))),
+            ),
+            (
+                r"il y a (\d+)\s*mois",
+                lambda m: now - timedelta(days=int(m.group(1)) * 30),
+            ),
             (r"aujourd'hui", lambda m: now),
             (r"hier", lambda m: now - timedelta(days=1)),
         ]
@@ -369,7 +408,11 @@ class FranceTravailScraper(BaseScraper):
 
             # Entreprise
             company_elem = soup.select_one("[itemprop='hiringOrganization']")
-            company = company_elem.get_text(strip=True) if company_elem else "Entreprise confidentielle"
+            company = (
+                company_elem.get_text(strip=True)
+                if company_elem
+                else "Entreprise confidentielle"
+            )
 
             # Localisation
             location_elem = soup.select_one("[itemprop='jobLocation']")
@@ -377,7 +420,9 @@ class FranceTravailScraper(BaseScraper):
 
             # Description
             description_elem = soup.select_one("[itemprop='description'], .description")
-            description = description_elem.get_text(strip=True) if description_elem else None
+            description = (
+                description_elem.get_text(strip=True) if description_elem else None
+            )
 
             return JobOffer(
                 id=f"francetravail_{job_id}",

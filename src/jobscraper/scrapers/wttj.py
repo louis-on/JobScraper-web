@@ -63,7 +63,10 @@ class WTTJScraper(BaseScraper):
             config: Configuration optionnelle
         """
         super().__init__(config)
-        self.hits_per_page = 20
+        # Algolia renvoie jusqu'à ~1000 hits par requête ; 100 par page est un
+        # bon compromis (5x moins de requêtes que l'ancien réglage à 20).
+        # Ajusté à la baisse dans search() si max_results est plus petit.
+        self.hits_per_page = 100
 
     def search(self, criteria: SearchCriteria) -> Iterator[JobOffer]:
         """
@@ -77,6 +80,8 @@ class WTTJScraper(BaseScraper):
         """
         jobs_found = 0
         max_results = criteria.max_results
+        # Ne pas demander à Algolia plus d'offres par page que le total visé.
+        self.hits_per_page = max(1, min(self.hits_per_page, max_results))
         page = 0
         seen_ids: set = set()
 
@@ -94,9 +99,13 @@ class WTTJScraper(BaseScraper):
         filters = self._build_filters(criteria)
 
         if use_geo:
-            logger.info(f"Recherche WTTJ: query='{query}', coords={coords}, rayon={criteria.radius_km}km")
+            logger.info(
+                f"Recherche WTTJ: query='{query}', coords={coords}, rayon={criteria.radius_km}km"
+            )
         elif criteria.location and criteria.radius_km:
-            logger.warning(f"Géocodage échoué pour {criteria.location}, recherche sans rayon")
+            logger.warning(
+                f"Géocodage échoué pour {criteria.location}, recherche sans rayon"
+            )
             logger.info(f"Recherche WTTJ: query='{query}'")
         else:
             logger.info(f"Recherche WTTJ: query='{query}'")
@@ -279,7 +288,11 @@ class WTTJScraper(BaseScraper):
             # URL
             org_slug = organization.get("slug", "")
             job_slug = hit.get("slug", "")
-            url = f"{self.base_url}/fr/companies/{org_slug}/jobs/{job_slug}" if org_slug and job_slug else ""
+            url = (
+                f"{self.base_url}/fr/companies/{org_slug}/jobs/{job_slug}"
+                if org_slug and job_slug
+                else ""
+            )
 
             # Description
             description = hit.get("summary") or ""

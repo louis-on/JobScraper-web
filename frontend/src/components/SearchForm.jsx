@@ -106,9 +106,9 @@ export default function SearchForm({ sources, searching, onSearch, onStop }) {
             </select>
           </label>
           <label>
-            Résultats max / source
+            Résultats max / source <small>(plus = plus lent)</small>
             <select value={form.max_results} onChange={set('max_results')}>
-              {[20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              {[20, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
         </div>

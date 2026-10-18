@@ -39,6 +39,7 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "httpx>=0.27.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "mypy>=1.7.0",
@@ -47,9 +48,14 @@ async = [
     "aiohttp>=3.9.0",
     "playwright>=1.40.0",
 ]
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+]
 
 [project.scripts]
 jobscraper = "jobscraper.cli:main"
+jobscraper-web = "jobscraper.web.app:run"
 
 [project.urls]
 Homepage = "https://github.com/zeffut/jobscraper"
@@ -76,4 +82,5 @@ disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 asyncio_mode = "auto"

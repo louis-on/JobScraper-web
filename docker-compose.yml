@@ -1,0 +1,14 @@
+# Lancement local (ou sur VPS) :  docker compose up --build
+# Interface : http://localhost:8000 — Documentation API : http://localhost:8000/docs
+services:
+  web:
+    build: .
+    ports:
+      - "8000:7860"
+    environment:
+      # JOBSCRAPER_DEMO: "1"   # décommentez pour activer la source de démonstration
+      JOBSCRAPER_CACHE_TTL: "900"
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped

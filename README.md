@@ -43,6 +43,48 @@ ADZUNA_APP_ID=votre_app_id
 ADZUNA_APP_KEY=votre_app_key
 ```
 
+## Version web
+
+Une interface web (API **FastAPI** + front **React/Vite**) partage le même
+code métier que la CLI : sources interrogées **en parallèle**, erreurs isolées
+par source, doublons inter-sources supprimés, résultats **streamés** dans le
+navigateur au fil du scraping. Voir [`docs/migration-web.md`](docs/migration-web.md)
+pour l'analyse et les choix d'architecture.
+
+```bash
+# 1. Installer le backend
+pip install -e ".[web]"
+
+# 2. Compiler le front (une fois, ou après chaque modification du front)
+npm --prefix frontend install
+npm --prefix frontend run build
+
+# 3. Lancer — interface : http://localhost:8000 , doc API : http://localhost:8000/docs
+jobscraper-web
+```
+
+**Développement front** (rechargement à chaud, `/api` proxifié vers le backend) :
+
+```bash
+jobscraper-web                 # terminal 1 : API sur le port 8000
+npm --prefix frontend run dev  # terminal 2 : front sur http://localhost:5173
+```
+
+**Avec Docker** (image unique front + API, déployable sur les offres Docker
+gratuites type Hugging Face Spaces ou Render) :
+
+```bash
+docker compose up --build      # http://localhost:8000
+```
+
+**Mode démo** : `JOBSCRAPER_DEMO=1 jobscraper-web` ajoute une source « Démo »
+à données fictives, pour travailler sur l'interface sans accès réseau.
+
+> ⚠️ Hébergé, votre serveur aura une IP de datacenter : certains sites
+> (LinkedIn notamment) peuvent bloquer le scraping. Chaque source échoue
+> alors indépendamment, sans casser les autres. Pensez à créer vos clés
+> Adzuna et, à terme, à utiliser l'API officielle France Travail.
+
 ## Utilisation
 
 ### Recherche simple
@@ -132,9 +174,18 @@ jobscraper/
 │   │   ├── hellowork.py    # Scraper HelloWork
 │   │   ├── francetravail.py # Scraper France Travail
 │   │   ├── wttj.py         # Scraper WTTJ (Algolia)
-│   │   └── adzuna.py       # Client API Adzuna
+│   │   ├── adzuna.py       # Client API Adzuna
+│   │   └── demo.py         # Données fictives (JOBSCRAPER_DEMO=1)
+│   ├── services/
+│   │   └── search.py       # Orchestration partagée CLI+web (parallèle, cache, dédup)
+│   ├── web/
+│   │   ├── app.py          # API FastAPI (+ front compilé servi à la racine)
+│   │   └── schemas.py      # Schémas d'API
 │   └── utils/
 │       └── geocoding.py    # Géocodage pour recherche par rayon
+├── frontend/               # Interface React + Vite (npm run build -> dist/)
+├── docs/migration-web.md   # Analyse et choix d'architecture web
+├── Dockerfile              # Image unique front + API
 ├── .env.example            # Template de configuration
 ├── pyproject.toml          # Configuration du projet
 └── requirements.txt        # Dépendances

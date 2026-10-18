@@ -1,0 +1,47 @@
+# Secrets et configuration locale — NE JAMAIS committer le vrai .env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Tests / qualité
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Données et exports générés par JobScraper
+data/
+/*.json
+!package.json
+/*.csv
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Frontend (Vue / Vite)
+node_modules/
+frontend/dist/
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -365,6 +365,42 @@ _DEMO_PEOPLE = [
         "Roubaix",
         ["devops", "sre"],
     ),
+    (
+        "demo_p13",
+        "Karim",
+        "Benali",
+        "Technicien de maintenance",
+        "Manitou Group",
+        "Nantes",
+        ["technicien de maintenance", "technicien maintenance", "maintenance industrielle"],
+    ),
+    (
+        "demo_p14",
+        "Sarah",
+        "Nguyen",
+        "Responsable maintenance",
+        "Manitou Group",
+        "Nantes",
+        ["responsable maintenance", "technicien de maintenance", "maintenance"],
+    ),
+    (
+        "demo_p15",
+        "Julien",
+        "Perrin",
+        "Technicien SAV",
+        "Armor Groupe",
+        "Nantes",
+        ["technicien sav", "technicien de maintenance", "technicien maintenance"],
+    ),
+    (
+        "demo_p16",
+        "Inès",
+        "Meyer",
+        "Technicienne de maintenance",
+        "Daher",
+        "Nantes",
+        ["technicienne de maintenance", "technicien de maintenance", "technicien maintenance"],
+    ),
 ]
 
 
@@ -388,9 +424,15 @@ class DemoPeopleProvider:
         if not titles:
             return True
         haystacks = [_norm(title)] + [_norm(a) for a in aliases]
+        joined = " ".join(haystacks)
         for wanted in titles:
             w = _norm(wanted)
             if any(w in h or h in w for h in haystacks):
+                return True
+            # Repli par mots : tous les mots significatifs du métier cherché
+            # présents dans le titre/les alias (ex. "technicien maintenance").
+            words = [x for x in w.split() if len(x) >= 3]
+            if words and all(x in joined for x in words):
                 return True
         return False
 

@@ -164,6 +164,17 @@ export default function App() {
           <p className="empty">
             Aucune offre ne correspond à ces critères. Essayez d'élargir les mots-clés,
             la localisation ou le rayon.
+            {health?.demo && (
+              <>
+                <br />
+                💡 Le catalogue de démonstration est volontairement petit : avec la source
+                « Démo », essayez par exemple <strong>Technicien de maintenance</strong> à
+                <strong> Nantes</strong>, <strong>Python</strong> à <strong>Paris</strong> ou
+                <strong> Data Engineer</strong> à <strong>Lille</strong>. Les vraies sources
+                (LinkedIn, HelloWork…) ne répondent que depuis une exécution locale —
+                l'aperçu hébergé ne peut pas les joindre.
+              </>
+            )}
           </p>
         )}
 

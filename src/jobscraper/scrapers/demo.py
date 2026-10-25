@@ -192,6 +192,42 @@ _SAMPLE = [
         ["Flutter", "Dart", "Firebase"],
         4,
     ),
+    (
+        "Technicien de maintenance industrielle (H/F)",
+        "Manitou Group",
+        "Nantes, Pays de la Loire",
+        ContractType.CDI,
+        ExperienceLevel.MID,
+        False,
+        30000,
+        38000,
+        ["Maintenance préventive", "Électromécanique", "GMAO"],
+        2,
+    ),
+    (
+        "Technicien maintenance SAV",
+        "Armor Groupe",
+        "Nantes, Pays de la Loire",
+        ContractType.CDI,
+        ExperienceLevel.JUNIOR,
+        False,
+        27000,
+        33000,
+        ["Maintenance corrective", "Pneumatique", "Lecture de plans"],
+        5,
+    ),
+    (
+        "Responsable maintenance",
+        "Manitou Group",
+        "Nantes, Pays de la Loire",
+        ContractType.CDI,
+        ExperienceLevel.LEAD,
+        False,
+        42000,
+        52000,
+        ["Management d'équipe", "GMAO", "Amélioration continue"],
+        6,
+    ),
 ]
 
 
@@ -252,15 +288,30 @@ class DemoScraper(BaseScraper):
             terms = [_norm(k) for k in (criteria.keywords or [])]
             if criteria.title:
                 terms.append(_norm(criteria.title))
+
+            def _term_matches(term: str, job: JobOffer) -> bool:
+                # Correspondance souple : la phrase exacte, ou tous ses mots
+                # significatifs présents (ex. "technicien maintenance" trouve
+                # "Technicien de maintenance industrielle").
+                haystack = _norm(
+                    " ".join(
+                        [
+                            job.title,
+                            job.company or "",
+                            job.description or "",
+                            *job.skills,
+                        ]
+                    )
+                )
+                if term in haystack:
+                    return True
+                words = [w for w in term.split() if len(w) >= 3]
+                return bool(words) and all(w in haystack for w in words)
+
             jobs = [
                 j
                 for j in jobs
-                if any(
-                    t in _norm(j.title)
-                    or any(t in _norm(s) for s in j.skills)
-                    or t in _norm(j.description or "")
-                    for t in terms
-                )
+                if any(_term_matches(t, j) for t in terms if t)
             ]
 
         location = _norm(criteria.location)

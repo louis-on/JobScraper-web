@@ -112,7 +112,8 @@ export default function Prospecting({ sources, demoMode = false }) {
       {status?.demo && (
         <p className="demo-banner">
           Personnes fictives du mode démo — exemples qui donnent un croisement :
-          « Développeur Python » à Nantes, ou « Data Engineer » à Lille.
+          « Technicien de maintenance » à Nantes, « Développeur Python » à Nantes,
+          ou « Data Engineer » à Lille.
           Ajoutez une vraie clé <code>APOLLO_API_KEY</code> (en local) pour des profils réels.
         </p>
       )}

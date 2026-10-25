@@ -19,8 +19,20 @@ const INITIAL = {
   selectedSources: [],
 }
 
-export default function SearchForm({ sources, searching, onSearch, onStop }) {
+export default function SearchForm({ sources, searching, demoMode = false, onSearch, onStop }) {
   const [form, setForm] = useState(INITIAL)
+
+  // En mode démo, présélectionner la source Démo : les jobboards réels sont
+  // injoignables depuis un aperçu hébergé, donc par défaut on interroge la
+  // seule source qui répond ici (l'utilisateur peut toujours changer les cases).
+  const didPreselect = useRef(false)
+  useEffect(() => {
+    if (didPreselect.current || !demoMode || !sources.length) return
+    if (sources.some((s) => s.id === 'demo')) {
+      didPreselect.current = true
+      setForm((prev) => ({ ...prev, selectedSources: ['demo'] }))
+    }
+  }, [demoMode, sources])
 
   const set = (field) => (event) =>
     setForm((prev) => ({ ...prev, [field]: event.target.value }))

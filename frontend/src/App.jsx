@@ -98,7 +98,9 @@ export default function App() {
         </p>
         {health?.demo && (
           <p className="demo-banner">
-            Mode démo actif : la source « Démo » renvoie des offres fictives, sans accès réseau.
+            Mode démo actif : la source « Démo » (données fictives) est présélectionnée.
+            Depuis cet aperçu hébergé, les jobboards réels et Apollo sont injoignables
+            (réseau sortant restreint) — lancez l'application en local pour des données réelles.
           </p>
         )}
       </header>
@@ -113,9 +115,9 @@ export default function App() {
       </nav>
 
       <main>
-        {tab === 'entreprises' && <Prospecting sources={sources} />}
+        {tab === 'entreprises' && <Prospecting sources={sources} demoMode={Boolean(health?.demo)} />}
         {tab === 'annonces' && (<>
-        <SearchForm sources={sources} searching={searching} onSearch={runSearch} onStop={stopSearch} />
+        <SearchForm sources={sources} searching={searching} demoMode={Boolean(health?.demo)} onSearch={runSearch} onStop={stopSearch} />
 
         {globalError && <p className="global-error">{globalError}</p>}
 
@@ -146,6 +148,17 @@ export default function App() {
             Recherche en cours… {jobs.length} offre{jobs.length > 1 ? 's' : ''} pour le moment
           </p>
         ) : null}
+
+        {searched && !searching && meta && !!failedSources.length && (
+          <div className="global-error">
+            ⚠️ Certaines sources n'ont pas pu être interrogées :
+            <ul>
+              {Object.entries(meta.errors || {}).map(([src, message]) => (
+                <li key={src}><strong>{sourceLabel(src)}</strong> — {message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {searched && !searching && jobs.length === 0 && (
           <p className="empty">

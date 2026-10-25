@@ -244,6 +244,43 @@ class SearchOutcome:
     cached: bool = False
 
 
+def friendly_error(exc: BaseException) -> str:
+    """Traduit une erreur technique de scraper en message affichable.
+
+    Les erreurs réseau brutes (SSL, timeouts, RetryError de tenacity…) sont
+    illisibles pour l'utilisateur final ; elles restent dans les logs.
+    """
+    text = str(exc)
+    low = text.lower()
+    network_markers = (
+        "ssl",
+        "connection",
+        "connexion",
+        "max retries",
+        "timed out",
+        "timeout",
+        "name resolution",
+        "failed to resolve",
+        "eof occurred",
+        "retryerror",
+        "remote disconnected",
+        "connection reset",
+    )
+    if any(marker in low for marker in network_markers):
+        return (
+            "Source injoignable (le site n'a pas répondu). "
+            "Depuis un aperçu hébergé, l'accès sortant aux jobboards peut "
+            "être bloqué ; en exécution locale, vérifiez la connexion ou "
+            "un éventuel blocage anti-robot du site."
+        )
+    if "403" in text or "429" in text or "forbidden" in low:
+        return (
+            "Accès refusé par le site (HTTP 403/429) : blocage anti-robot "
+            "probable, réessayez plus tard ou réduisez le nombre de résultats."
+        )
+    return text if len(text) < 300 else f"{type(exc).__name__} : {text[:200]}…"
+
+
 def iter_search_events(
     criteria: SearchCriteria, sources: Iterable[str]
 ) -> Iterator[SearchEvent]:
@@ -266,7 +303,11 @@ def iter_search_events(
             events.put(SearchEvent(type="source_done", source=source, count=count))
         except Exception as exc:  # isolation : une source ne casse pas le reste
             logger.exception(f"Source {source} en échec")
-            events.put(SearchEvent(type="source_error", source=source, error=str(exc)))
+            events.put(
+                SearchEvent(
+                    type="source_error", source=source, error=friendly_error(exc)
+                )
+            )
 
     threads = [
         threading.Thread(target=worker, args=(source,), daemon=True)

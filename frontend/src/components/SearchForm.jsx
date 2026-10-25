@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const CONTRACTS = [
   ['cdi', 'CDI'], ['cdd', 'CDD'], ['stage', 'Stage'],

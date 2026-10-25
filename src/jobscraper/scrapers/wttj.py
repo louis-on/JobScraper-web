@@ -139,6 +139,10 @@ class WTTJScraper(BaseScraper):
 
             except Exception as e:
                 logger.error(f"Erreur recherche WTTJ: {e}")
+                if jobs_found == 0:
+                    # La toute première page a échoué : remonter l'échec pour
+                    # qu'il soit signalé à l'utilisateur au lieu d'un faux « 0 offre ».
+                    raise
                 break
 
         logger.info(f"Recherche terminée: {jobs_found} offres uniques trouvées")

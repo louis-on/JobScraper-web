@@ -97,9 +97,25 @@ class ApolloPeopleProvider:
             return response.json()
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else "?"
+            if status in (401, 403):
+                raise ApolloError(
+                    "Apollo a refusé l'appel (HTTP "
+                    f"{status}) : clé API invalide, ou compte gratuit non "
+                    "inscrit avec un e-mail professionnel."
+                ) from exc
+            if status == 429:
+                raise ApolloError(
+                    "Apollo a limité les appels (HTTP 429) : réessayez dans "
+                    "une minute, les quotas du plan gratuit sont serrés."
+                ) from exc
             raise ApolloError(f"Apollo a répondu HTTP {status} sur {path}") from exc
         except requests.RequestException as exc:
-            raise ApolloError(f"Appel Apollo impossible ({path}) : {exc}") from exc
+            # Typiquement un environnement sans accès sortant vers api.apollo.io.
+            raise ApolloError(
+                "Apollo injoignable : la connexion réseau vers api.apollo.io "
+                "a échoué. Depuis un aperçu hébergé, l'accès sortant peut "
+                "être bloqué ; lancez l'application en local pour joindre Apollo."
+            ) from exc
 
     def search_people(
         self,

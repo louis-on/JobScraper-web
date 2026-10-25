@@ -127,6 +127,10 @@ class HelloWorkScraper(BaseScraper):
 
             except Exception as e:
                 logger.error(f"Erreur lors de la recherche: {e}")
+                if jobs_found == 0:
+                    # La toute première page a échoué : remonter l'échec pour
+                    # qu'il soit signalé à l'utilisateur au lieu d'un faux « 0 offre ».
+                    raise
                 break
 
         logger.info(f"Recherche terminée: {jobs_found} offres uniques trouvées")
@@ -279,7 +283,9 @@ class HelloWorkScraper(BaseScraper):
                 company = company_elem.get_text(strip=True) if company_elem else None
 
             # Tags (localisation, contrat, salaire, télétravail)
-            tags = card.select("div.tw-tag-secondary-s, div.tw-readonly.tw-tag-secondary-s")
+            tags = card.select(
+                "div.tw-tag-secondary-s, div.tw-readonly.tw-tag-secondary-s"
+            )
 
             location = None
             contract_type = None
@@ -292,7 +298,15 @@ class HelloWorkScraper(BaseScraper):
                 if re.search(r"\d{2,5}$|^\d{5}", text) and not location:
                     location = text
                 # Type de contrat
-                elif text.upper() in ["CDI", "CDD", "STAGE", "ALTERNANCE", "INTÉRIM", "INTERIM", "FREELANCE"]:
+                elif text.upper() in [
+                    "CDI",
+                    "CDD",
+                    "STAGE",
+                    "ALTERNANCE",
+                    "INTÉRIM",
+                    "INTERIM",
+                    "FREELANCE",
+                ]:
                     contract_type = self._map_contract_type(text)
                 # Salaire
                 elif "€" in text:
@@ -377,11 +391,20 @@ class HelloWorkScraper(BaseScraper):
         now = datetime.now()
 
         patterns = [
-            (r"il y a (\d+)\s*minute", lambda m: now - timedelta(minutes=int(m.group(1)))),
+            (
+                r"il y a (\d+)\s*minute",
+                lambda m: now - timedelta(minutes=int(m.group(1))),
+            ),
             (r"il y a (\d+)\s*heure", lambda m: now - timedelta(hours=int(m.group(1)))),
             (r"il y a (\d+)\s*jour", lambda m: now - timedelta(days=int(m.group(1)))),
-            (r"il y a (\d+)\s*semaine", lambda m: now - timedelta(weeks=int(m.group(1)))),
-            (r"il y a (\d+)\s*mois", lambda m: now - timedelta(days=int(m.group(1)) * 30)),
+            (
+                r"il y a (\d+)\s*semaine",
+                lambda m: now - timedelta(weeks=int(m.group(1))),
+            ),
+            (
+                r"il y a (\d+)\s*mois",
+                lambda m: now - timedelta(days=int(m.group(1)) * 30),
+            ),
             (r"aujourd'hui", lambda m: now),
             (r"hier", lambda m: now - timedelta(days=1)),
         ]
@@ -393,7 +416,9 @@ class HelloWorkScraper(BaseScraper):
 
         return None
 
-    def _parse_job_details(self, soup: BeautifulSoup, job_id: str, url: str) -> Optional[JobOffer]:
+    def _parse_job_details(
+        self, soup: BeautifulSoup, job_id: str, url: str
+    ) -> Optional[JobOffer]:
         """
         Parse les détails complets d'une offre.
 
@@ -415,12 +440,13 @@ class HelloWorkScraper(BaseScraper):
                 "[class*='company'], [class*='entreprise'], "
                 "[itemprop='hiringOrganization']"
             )
-            company = company_elem.get_text(strip=True) if company_elem else "Non spécifié"
+            company = (
+                company_elem.get_text(strip=True) if company_elem else "Non spécifié"
+            )
 
             # Localisation
             location_elem = soup.select_one(
-                "[class*='location'], [class*='lieu'], "
-                "[itemprop='jobLocation']"
+                "[class*='location'], [class*='lieu'], " "[itemprop='jobLocation']"
             )
             location = location_elem.get_text(strip=True) if location_elem else "France"
 
@@ -429,7 +455,9 @@ class HelloWorkScraper(BaseScraper):
                 "[class*='description'], [itemprop='description'], "
                 ".job-description, #job-description"
             )
-            description = description_elem.get_text(strip=True) if description_elem else None
+            description = (
+                description_elem.get_text(strip=True) if description_elem else None
+            )
 
             # Type de contrat
             contract_type = None

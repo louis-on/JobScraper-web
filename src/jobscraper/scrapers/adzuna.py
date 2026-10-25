@@ -75,8 +75,11 @@ class AdzunaScraper(BaseScraper):
             JobOffer: Les offres d'emploi trouvées
         """
         if not self.app_id or not self.app_key:
-            logger.error("Clés API Adzuna manquantes")
-            return
+            # Remonté comme erreur de source (pas un simple « 0 offre »).
+            raise RuntimeError(
+                "Clés API Adzuna manquantes : définissez ADZUNA_APP_ID et "
+                "ADZUNA_APP_KEY (clés gratuites sur developer.adzuna.com)."
+            )
 
         page = 1
         jobs_found = 0
@@ -125,9 +128,13 @@ class AdzunaScraper(BaseScraper):
 
             except requests.RequestException as e:
                 logger.error(f"Erreur API Adzuna: {e}")
+                if jobs_found == 0:
+                    raise
                 break
             except Exception as e:
                 logger.error(f"Erreur lors de la recherche: {e}")
+                if jobs_found == 0:
+                    raise
                 break
 
         logger.info(f"Recherche terminée: {jobs_found} offres uniques trouvées")
@@ -139,7 +146,9 @@ class AdzunaScraper(BaseScraper):
         """
         return None
 
-    def _build_search_url(self, criteria: SearchCriteria, page: int, results_per_page: int) -> str:
+    def _build_search_url(
+        self, criteria: SearchCriteria, page: int, results_per_page: int
+    ) -> str:
         """
         Construit l'URL de requête API Adzuna.
 

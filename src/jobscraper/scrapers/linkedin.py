@@ -30,43 +30,43 @@ class LinkedInScraper(BaseScraper):
     # Mapping des niveaux d'expérience LinkedIn
     EXPERIENCE_MAPPING = {
         ExperienceLevel.INTERNSHIP: "1",  # Internship
-        ExperienceLevel.JUNIOR: "2",      # Entry level
-        ExperienceLevel.MID: "3",         # Associate
-        ExperienceLevel.SENIOR: "4",      # Mid-Senior level
-        ExperienceLevel.LEAD: "5",        # Director
-        ExperienceLevel.DIRECTOR: "6",    # Executive
+        ExperienceLevel.JUNIOR: "2",  # Entry level
+        ExperienceLevel.MID: "3",  # Associate
+        ExperienceLevel.SENIOR: "4",  # Mid-Senior level
+        ExperienceLevel.LEAD: "5",  # Director
+        ExperienceLevel.DIRECTOR: "6",  # Executive
     }
 
     # Mapping des types de contrat LinkedIn
     CONTRACT_MAPPING = {
-        ContractType.CDI: "F",        # Full-time
-        ContractType.CDD: "C",        # Contract
-        ContractType.INTERIM: "T",    # Temporary
-        ContractType.STAGE: "I",      # Internship
-        ContractType.ALTERNANCE: "I", # Internship (closest match)
+        ContractType.CDI: "F",  # Full-time
+        ContractType.CDD: "C",  # Contract
+        ContractType.INTERIM: "T",  # Temporary
+        ContractType.STAGE: "I",  # Internship
+        ContractType.ALTERNANCE: "I",  # Internship (closest match)
         ContractType.FREELANCE: "C",  # Contract
-        ContractType.OTHER: "O",      # Other
+        ContractType.OTHER: "O",  # Other
     }
 
     # Mapping des types de lieu de travail
     WORKPLACE_MAPPING = {
-        WorkplaceType.ON_SITE: "1",   # On-site
-        WorkplaceType.REMOTE: "2",    # Remote
-        WorkplaceType.HYBRID: "3",    # Hybrid
+        WorkplaceType.ON_SITE: "1",  # On-site
+        WorkplaceType.REMOTE: "2",  # Remote
+        WorkplaceType.HYBRID: "3",  # Hybrid
     }
 
     # Mapping des dates de publication
     DATE_POSTED_MAPPING = {
-        DatePosted.PAST_24H: "r86400",     # Past 24 hours
-        DatePosted.PAST_WEEK: "r604800",   # Past week
-        DatePosted.PAST_MONTH: "r2592000", # Past month
-        DatePosted.ANY_TIME: "",           # Any time (no filter)
+        DatePosted.PAST_24H: "r86400",  # Past 24 hours
+        DatePosted.PAST_WEEK: "r604800",  # Past week
+        DatePosted.PAST_MONTH: "r2592000",  # Past month
+        DatePosted.ANY_TIME: "",  # Any time (no filter)
     }
 
     # Mapping du tri
     SORT_MAPPING = {
         SortBy.RELEVANCE: "R",  # Most relevant
-        SortBy.DATE: "DD",      # Most recent
+        SortBy.DATE: "DD",  # Most recent
     }
 
     # Rayons de recherche disponibles (en miles pour LinkedIn)
@@ -146,6 +146,10 @@ class LinkedInScraper(BaseScraper):
 
             except Exception as e:
                 logger.error(f"Erreur lors de la recherche: {e}")
+                if jobs_found == 0:
+                    # La toute première page a échoué : remonter l'échec pour
+                    # qu'il soit signalé à l'utilisateur au lieu d'un faux « 0 offre ».
+                    raise
                 break
 
         logger.info(f"Recherche terminée: {jobs_found} offres uniques trouvées")
@@ -343,7 +347,9 @@ class LinkedInScraper(BaseScraper):
             location = location_elem.get_text(strip=True) if location_elem else None
 
             # URL et ID
-            link_elem = card.select_one("a.base-card__full-link, a.job-card-list__title")
+            link_elem = card.select_one(
+                "a.base-card__full-link, a.job-card-list__title"
+            )
             url = link_elem.get("href") if link_elem else None
 
             # Extraire l'ID de l'URL (format: /jobs/view/titre-slug-123456)
@@ -389,8 +395,7 @@ class LinkedInScraper(BaseScraper):
             datetime ou None
         """
         date_elem = card.select_one(
-            "time.job-search-card__listdate, "
-            "time.job-card-container__listed-date"
+            "time.job-search-card__listdate, " "time.job-card-container__listed-date"
         )
 
         if date_elem:
@@ -420,11 +425,23 @@ class LinkedInScraper(BaseScraper):
         now = datetime.now()
 
         patterns = [
-            (r"(\d+)\s*(minute|min)", lambda m: now - timedelta(minutes=int(m.group(1)))),
-            (r"(\d+)\s*(heure|hour|hr)", lambda m: now - timedelta(hours=int(m.group(1)))),
+            (
+                r"(\d+)\s*(minute|min)",
+                lambda m: now - timedelta(minutes=int(m.group(1))),
+            ),
+            (
+                r"(\d+)\s*(heure|hour|hr)",
+                lambda m: now - timedelta(hours=int(m.group(1))),
+            ),
             (r"(\d+)\s*(jour|day)", lambda m: now - timedelta(days=int(m.group(1)))),
-            (r"(\d+)\s*(semaine|week)", lambda m: now - timedelta(weeks=int(m.group(1)))),
-            (r"(\d+)\s*(mois|month)", lambda m: now - timedelta(days=int(m.group(1)) * 30)),
+            (
+                r"(\d+)\s*(semaine|week)",
+                lambda m: now - timedelta(weeks=int(m.group(1))),
+            ),
+            (
+                r"(\d+)\s*(mois|month)",
+                lambda m: now - timedelta(days=int(m.group(1)) * 30),
+            ),
         ]
 
         for pattern, handler in patterns:
@@ -434,7 +451,9 @@ class LinkedInScraper(BaseScraper):
 
         return None
 
-    def _parse_job_details(self, soup: BeautifulSoup, job_id: str, url: str) -> Optional[JobOffer]:
+    def _parse_job_details(
+        self, soup: BeautifulSoup, job_id: str, url: str
+    ) -> Optional[JobOffer]:
         """
         Parse les détails complets d'une offre.
 
@@ -449,29 +468,25 @@ class LinkedInScraper(BaseScraper):
         try:
             # Titre
             title = soup.select_one(
-                "h1.top-card-layout__title, "
-                "h1.jobs-unified-top-card__job-title"
+                "h1.top-card-layout__title, " "h1.jobs-unified-top-card__job-title"
             )
             title = title.get_text(strip=True) if title else "Unknown"
 
             # Entreprise
             company = soup.select_one(
-                "a.topcard__org-name-link, "
-                "span.jobs-unified-top-card__company-name"
+                "a.topcard__org-name-link, " "span.jobs-unified-top-card__company-name"
             )
             company = company.get_text(strip=True) if company else "Unknown"
 
             # Localisation
             location = soup.select_one(
-                "span.topcard__flavor--bullet, "
-                "span.jobs-unified-top-card__bullet"
+                "span.topcard__flavor--bullet, " "span.jobs-unified-top-card__bullet"
             )
             location = location.get_text(strip=True) if location else "France"
 
             # Description
             description = soup.select_one(
-                "div.description__text, "
-                "div.jobs-description__content"
+                "div.description__text, " "div.jobs-description__content"
             )
             description_text = description.get_text(strip=True) if description else None
 
@@ -504,7 +519,9 @@ class LinkedInScraper(BaseScraper):
 
             # Compétences
             skills = []
-            skills_section = soup.select("span.job-details-skill-match-status-list__skill-name")
+            skills_section = soup.select(
+                "span.job-details-skill-match-status-list__skill-name"
+            )
             for skill in skills_section:
                 skills.append(skill.get_text(strip=True))
 

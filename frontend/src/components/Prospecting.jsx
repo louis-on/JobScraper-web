@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { crossSearch, fetchProspectsStatus, revealPerson } from '../api'
 import CompanyGroup from './CompanyGroup.jsx'
 
@@ -15,7 +15,7 @@ const FILTERS = [
   ['employing_only', 'Emploient déjà'],
 ]
 
-export default function Prospecting({ sources }) {
+export default function Prospecting({ sources, demoMode = false }) {
   const [form, setForm] = useState(INITIAL)
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -28,6 +28,17 @@ export default function Prospecting({ sources }) {
   useEffect(() => {
     fetchProspectsStatus().then(setStatus).catch(() => setStatus({ available: false, reason: "Statut Apollo indisponible." }))
   }, [])
+
+  // Comme dans l'onglet Annonces : en mode démo, présélectionner la source
+  // Démo (les jobboards réels sont injoignables depuis un aperçu hébergé).
+  const didPreselect = useRef(false)
+  useEffect(() => {
+    if (didPreselect.current || !demoMode || !sources.length) return
+    if (sources.some((s) => s.id === 'demo')) {
+      didPreselect.current = true
+      setForm((prev) => ({ ...prev, selectedSources: ['demo'] }))
+    }
+  }, [demoMode, sources])
 
   const set = (field) => (event) =>
     setForm((prev) => ({ ...prev, [field]: event.target.value }))
@@ -100,7 +111,9 @@ export default function Prospecting({ sources }) {
       )}
       {status?.demo && (
         <p className="demo-banner">
-          Personnes fictives du mode démo — ajoutez une vraie clé <code>APOLLO_API_KEY</code> pour des profils réels.
+          Personnes fictives du mode démo — exemples qui donnent un croisement :
+          « Développeur Python » à Nantes, ou « Data Engineer » à Lille.
+          Ajoutez une vraie clé <code>APOLLO_API_KEY</code> (en local) pour des profils réels.
         </p>
       )}
 
@@ -194,7 +207,14 @@ export default function Prospecting({ sources }) {
           </p>
           {data.apollo_error && <p className="global-error">⚠️ Personnes : {data.apollo_error}</p>}
           {!!Object.keys(data.summary.job_errors || {}).length && (
-            <p className="summary">Sources d'annonces en échec : {Object.keys(data.summary.job_errors).join(', ')}.</p>
+            <div className="global-error">
+              ⚠️ Sources d'annonces en échec :
+              <ul>
+                {Object.entries(data.summary.job_errors).map(([src, message]) => (
+                  <li key={src}><strong>{src}</strong> — {message}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {revealError && <p className="global-error">⚠️ {revealError}</p>}
 

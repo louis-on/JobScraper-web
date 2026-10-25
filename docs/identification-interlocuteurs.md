@@ -226,3 +226,86 @@ C'est 1 à 2 heures de travail et cela évite 588 $/an engagés à l'aveugle.
 | **1** | Provider X-ray Brave + scoring + panneau « Interlocuteurs » dans l'UI (à la demande) | 0 € (crédit mensuel) | 1–2 j |
 | **2** | Mesure sur 30 annonces (§5) : gratuit vs Apollo Free vs essai FullEnrich | 0 € | 2 h |
 | **3** | Branchement du fournisseur payant gagnant en bout de cascade, avec plafond budget | dès 19–29 $/mois seulement si le gratuit ne suffit pas | 0,5–1 j |
+
+---
+
+## Annexe — Ce que permet gratuitement l'API Apollo (état au 21/10/2026)
+
+Règle officielle : seuls les endpoints du tableau *API Pricing and Credits* consomment des
+crédits ; **tous les autres endpoints sont à 0 crédit**
+([source](https://docs.apollo.io/docs/api-pricing)). L'accès API est inclus dans tous les plans,
+y compris Free, à condition d'un compte inscrit avec un **e-mail professionnel**
+([source](https://knowledge.apollo.io/hc/en-us/articles/4416173158541-Use-Apollo-API)).
+
+### A. 0 crédit (borné uniquement par les rate limits du plan Free)
+
+Rate limits Free — **par équipe et par endpoint** : recherche et standard 50/min, 200/h, **600/jour** ;
+enrichissement 50/min (20 bulk), 200/h (100 bulk), 600/jour
+([source](https://docs.apollo.io/reference/rate-limits)).
+
+- **People API Search** (`POST /api/v1/mixed_people/api_search`) — la pièce centrale : 0 crédit,
+  100 résultats/page, plafond d'affichage 50 000 personnes. Filtres : `person_titles`
+  (+ similaires, exclusions de titres actuels/passés), `person_seniorities` (owner → intern),
+  `person_locations` / `organization_locations`, `q_keywords`, `q_person_name`, et côté entreprise :
+  CA (`revenue_range`), technologies utilisées (1 500+), **titres des offres
+  activement recrutées** (`q_organization_job_titles`), nombre d'offres actives, dates de publication,
+  croissance d'effectif. Retourne : `total_entries`, id Apollo, prénom, **nom masqué**, titre actuel,
+  indicateurs de disponibilité des données de l'employeur — **ni e-mail, ni téléphone, ni URL LinkedIn**
+  ([source](https://docs.apollo.io/reference/people-api-search)).
+- **Gestion des records** (vos données Apollo, tout à 0 crédit) : *Accounts* et *Contacts*
+  (recherche, lecture, création, création en bulk, mise à jour, bulk update, changement de propriétaire/
+  d'étape, listes des étapes), *Deals* (liste, lecture, création, mise à jour, étapes),
+  *Lists* (lister, créer, mettre à jour, ajouter/retirer des records), *Notes* (lister).
+- **Engagement** (0 crédit ; limites du plan Free par ailleurs) : *Sequences* (créer, mettre à jour,
+  rechercher, activer/désactiver/archiver, ajouter des contacts, statuts, activité, plannings d'envoi),
+  *Emails* (brouillon, envoi immédiat, statut, recherche d'e-mails d'outreach, contenu, statistiques),
+  *Calls* (créer/chercher/mettre à jour des enregistrements d'appels),
+  *Tasks* (chercher, lire, créer, bulk, compléter, mettre à jour, passer),
+  *Conversations* sans AI insights (recherche, infos, export : 0 crédit si pas d'insights IA).
+- **AI Assistant** : soumettre une tâche et la *poller* ne consomme rien ; seules les actions
+  réalisées (ex. enrichissement) sont facturées selon l'action.
+- **Workspace & pilotage** : liste des utilisateurs, profil courant, comptes e-mail, champs
+  personnalisés (lister/créer/mettre à jour), rapport analytics (5 req/h),
+  **consultation de votre consommation de crédits et de vos rate limits**, polling de webhooks.
+
+### B. Payant au crédit — mais finançable par les 75 crédits/mois du plan Free
+
+Le plan Free octroie **75 crédits/mois** (900/an versés mensuellement, pas d'un bloc), 1 siège,
+sans possibilité d'acheter des crédits additionnels
+([source](https://pipeline.zoominfo.com/sales/apollo-api-review),
+[source](https://www.trexinet.com/blog/apollo-free-credits)).
+Tarifs officiels par endpoint ([source](https://docs.apollo.io/docs/api-pricing)) et équivalent mensuel gratuit :
+
+| Endpoint | Coût | Avec 75 crédits/mois |
+|---|---|---|
+| People enrichment / bulk (10 max/appel) | **1 crédit** si données démographiques/e-mail trouvées (URL LinkedIn incluse), **+8** si mobile renvoyé, **0 si rien trouvé** | ~75 personnes démasquées (sans téléphone) |
+| Get complete person info | 1 crédit/personne | 75 profils |
+| Organization enrichment / bulk ; Get complete organization info | 1 crédit/entreprise | 75 entreprises |
+| Organization search | 1 crédit/page (≤100 résultats) | 75 pages ≈ métadonnées de 7 500 entreprises |
+| Organization job postings | 1 crédit/page (≤10 000 résultats) | 75 pages d'offres d'une entreprise |
+| News articles search | 1 crédit/page (≤25 articles) | 75 pages ≈ 1 875 articles |
+| Conversations (avec AI insights) | 1 crédit/conversation | 75 conversations |
+
+Optimisations : ne jamais demander la révélation du téléphone (+8 crédits) pour l'objectif
+« URL LinkedIn » ; n'enrichir que les meilleurs IDs issus de la recherche gratuite ;
+un échec de matching (`match_confidence: none`) ne coûte rien.
+
+### C. Non inclus dans le gratuit
+
+- URL LinkedIn, e-mail et téléphone **via la seule recherche** (enrichissement indispensable).
+- **Waterfall enrichment** (cascade multi-fournisseurs) : absent du plan Free — et de toute façon
+  typiquement 1–4 crédits/e-mail et 8–25/téléphone, parfois facturé même en échec selon les vendeurs.
+- Crédits au-delà des 75/mois (pas d'achat d'add-ons en Free) ; limites applicatives du plan Free
+  (séquences, boîte d'envoi unique, filtres « basiques » dans l'UI, plafond de sélection de 25 records).
+- Endpoints de recherche/enrichissement avec un compte inscrit via e-mail personnel (bloqués).
+
+### D. Traduction concrète pour JobScraper (0 €/mois)
+
+1. Par entreprise d'une annonce : **People Search gratuite** filtrée par domaine/nom +
+   titres recrutement et hiring manager → vous savez gratuitement *combien* d'interlocuteurs
+   potentiels existent et leurs titres (prénom + initiale).
+2. **Enrichir uniquement le top 1–2** : 1–2 crédits/entreprise → **37 à 75 entreprises par mois**
+   entièrement identifiées (nom complet + URL LinkedIn), résultat caché par entreprise.
+3. Les contacts validés peuvent être **stockés gratuitement dans Apollo** (création de contacts
+   à 0 crédit) ou, mieux, dans votre propre cache local.
+

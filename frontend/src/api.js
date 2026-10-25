@@ -14,6 +14,40 @@ export async function fetchHealth() {
   return response.json()
 }
 
+// --- Recherche croisée annonces x personnes (Apollo) ---
+
+export async function fetchProspectsStatus() {
+  const response = await fetch('/api/prospects/status')
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
+}
+
+export async function crossSearch(payload) {
+  const response = await fetch('/api/cross-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}))
+    throw new Error(detail.detail || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function revealPerson(personId) {
+  const response = await fetch('/api/prospects/reveal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ person_id: personId }),
+  })
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}))
+    throw new Error(detail.detail || `HTTP ${response.status}`)
+  }
+  return (await response.json()).person
+}
+
 // Recherche en streaming (Server-Sent Events) : les offres arrivent au fil
 // de l'eau, source par source, sans attendre la fin complète du scraping.
 export function streamSearch(criteria, handlers) {

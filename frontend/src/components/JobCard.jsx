@@ -1,15 +1,4 @@
-const CONTRACT_LABELS = {
-  cdi: 'CDI', cdd: 'CDD', stage: 'Stage', alternance: 'Alternance',
-  interim: 'Intérim', freelance: 'Freelance', other: 'Autre',
-}
-const EXPERIENCE_LABELS = {
-  internship: 'Stage', junior: 'Junior', mid: 'Confirmé',
-  senior: 'Senior', lead: 'Lead', director: 'Direction',
-}
-const SOURCE_LABELS = {
-  linkedin: 'LinkedIn', hellowork: 'HelloWork', francetravail: 'France Travail',
-  adzuna: 'Adzuna', wttj: 'WTTJ', demo: 'Démo',
-}
+import { CONTRACT_LABELS, EXPERIENCE_LABELS, SOURCE_LABELS } from '../labels.js'
 
 function salaryLabel(job) {
   const { salary_min: min, salary_max: max } = job

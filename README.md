@@ -80,6 +80,32 @@ docker compose up --build      # http://localhost:8000
 **Mode démo** : `JOBSCRAPER_DEMO=1 jobscraper-web` ajoute une source « Démo »
 à données fictives, pour travailler sur l'interface sans accès réseau.
 
+### Recherche croisée « Annonces × Personnes » (Apollo)
+
+L'onglet **« Entreprises »** de l'interface croise, pour un même métier et une
+même localisation, les entreprises qui **recrutent** (les annonces ci-dessus)
+et celles qui **emploient déjà** ce profil (recherche de personnes Apollo).
+Résultats regroupés **par entreprise** : annonces à gauche, personnes à droite,
+avec badge « Recrute + emploie déjà » pour les entreprises présentes des deux
+côtés. Les deux recherches sont lancées en parallèle côté serveur.
+
+- La recherche de personnes Apollo est **gratuite** (0 crédit) mais masquée :
+  prénom, nom crypté, poste, entreprise. Le bouton **« Révéler »** d'un profil
+  appelle l'enrichissement Apollo (**1 crédit** si trouvé, jamais le téléphone)
+  pour obtenir nom complet, lieu et URL LinkedIn.
+- Compte Apollo gratuit sur [apollo.io](https://www.apollo.io/) (inscription
+  avec un **e-mail professionnel** obligatoire pour l'API, 75 crédits/mois),
+  puis renseignez `APOLLO_API_KEY` dans `.env`.
+- Sans clé, `JOBSCRAPER_DEMO=1` fournit des personnes fictives au même format
+  (essayez : métier « Développeur Python », localisation « Paris »).
+- Nuances : les variantes d'intitulé alimentent Apollo (OR) ; côté annonces,
+  seul le métier principal est cherché par défaut (case à cocher pour étendre).
+  Le rayon ne s'applique qu'aux annonces — Apollo filtre par ville/pays.
+  Voir [`docs/identification-interlocuteurs.md`](docs/identification-interlocuteurs.md).
+
+Endpoints correspondants : `POST /api/cross-search`, `POST /api/prospects/reveal`,
+`GET /api/prospects/status` (détails dans `/docs`).
+
 > ⚠️ Hébergé, votre serveur aura une IP de datacenter : certains sites
 > (LinkedIn notamment) peuvent bloquer le scraping. Chaque source échoue
 > alors indépendamment, sans casser les autres. Pensez à créer vos clés

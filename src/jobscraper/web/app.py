@@ -41,7 +41,22 @@ from jobscraper.models.job import (
     WorkplaceType,
 )
 from jobscraper.services import search as search_service
-from jobscraper.web.schemas import HealthResponse, SearchRequest, SearchResponse
+from jobscraper.services.apollo import (
+    ApolloError,
+    get_people_provider,
+    provider_status,
+)
+from jobscraper.services.cross_search import run_cross_search
+from jobscraper.web.schemas import (
+    CrossSearchRequest,
+    CrossSearchResponse,
+    HealthResponse,
+    ProspectsStatusResponse,
+    RevealRequest,
+    RevealResponse,
+    SearchRequest,
+    SearchResponse,
+)
 
 
 def _frontend_dist() -> Optional[Path]:
@@ -181,6 +196,66 @@ def create_app() -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.get(
+        "/api/prospects/status",
+        response_model=ProspectsStatusResponse,
+        tags=["prospects"],
+    )
+    def prospects_status() -> ProspectsStatusResponse:
+        """Le provider de personnes (Apollo ou démo) est-il disponible ?"""
+        return ProspectsStatusResponse(**provider_status())
+
+    @app.post(
+        "/api/cross-search", response_model=CrossSearchResponse, tags=["prospects"]
+    )
+    def cross_search(request: CrossSearchRequest) -> CrossSearchResponse:
+        """Croise annonces et personnes Apollo, regroupées par entreprise.
+
+        Les deux recherches sont lancées en parallèle côté serveur. La
+        recherche de personnes Apollo est gratuite (profils masqués) ;
+        utiliser ``/api/prospects/reveal`` pour démasquer un profil.
+        """
+        try:
+            outcome = run_cross_search(
+                metier=request.metier,
+                variants=request.title_variants,
+                location=request.location,
+                radius_km=request.radius_km,
+                sources=request.sources,
+                max_jobs_per_source=request.max_jobs_per_source,
+                max_people=request.max_people,
+                include_job_variants=request.include_job_variants,
+                verified_email_only=request.verified_email_only,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        return CrossSearchResponse(
+            companies=outcome.companies,
+            summary=outcome.summary,
+            apollo_available=outcome.apollo_available,
+            apollo_demo=outcome.apollo_demo,
+            apollo_error=outcome.apollo_error,
+            duration_ms=outcome.duration_ms,
+        )
+
+    @app.post(
+        "/api/prospects/reveal", response_model=RevealResponse, tags=["prospects"]
+    )
+    def reveal(request: RevealRequest) -> RevealResponse:
+        """Démasque un profil (1 crédit Apollo si trouvé ; fictif en démo)."""
+        provider = get_people_provider()
+        if provider is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Apollo non configuré (APOLLO_API_KEY manquante).",
+            )
+        try:
+            person = provider.reveal_person(request.person_id)
+        except ApolloError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RevealResponse(person=person)
 
     dist = _frontend_dist()
     if dist is not None:

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchHealth, fetchSources, streamSearch } from './api'
 import JobCard from './components/JobCard.jsx'
+import Prospecting from './components/Prospecting.jsx'
 import SearchForm from './components/SearchForm.jsx'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
   // État par source pendant le streaming : loading | done | error | stopped (+ compteur)
   const [sourceStates, setSourceStates] = useState({})
   const streamRef = useRef(null)
+  const [tab, setTab] = useState('annonces')
 
   useEffect(() => {
     fetchSources().then(setSources).catch(() =>
@@ -101,7 +103,18 @@ export default function App() {
         )}
       </header>
 
+      <nav className="tabs" aria-label="Modes de recherche">
+        <button type="button" className={tab === 'annonces' ? 'active' : ''} onClick={() => setTab('annonces')}>
+          📢 Annonces
+        </button>
+        <button type="button" className={tab === 'entreprises' ? 'active' : ''} onClick={() => setTab('entreprises')}>
+          🏢 Entreprises : Annonces × Personnes
+        </button>
+      </nav>
+
       <main>
+        {tab === 'entreprises' && <Prospecting sources={sources} />}
+        {tab === 'annonces' && (<>
         <SearchForm sources={sources} searching={searching} onSearch={runSearch} onStop={stopSearch} />
 
         {globalError && <p className="global-error">{globalError}</p>}
@@ -146,6 +159,7 @@ export default function App() {
             <JobCard key={`${job.source}-${job.id}`} job={job} />
           ))}
         </section>
+        </>)}
       </main>
 
       <footer className="site-footer">

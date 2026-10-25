@@ -244,14 +244,70 @@ class SearchOutcome:
     cached: bool = False
 
 
+def unwrap_error(exc: BaseException) -> BaseException:
+    """Retrouve l'exception d'origine sous les enveloppes (tenacity…).
+
+    Un ``RetryError`` de tenacity ne contient pas le message de l'erreur qui
+    a réellement échoué (403, SSL…) : sans déballage, tout ressemble à un
+    problème réseau générique.
+    """
+    seen: set = set()
+    while True:
+        last_attempt = getattr(exc, "last_attempt", None)
+        if last_attempt is None or not hasattr(last_attempt, "exception"):
+            return exc
+        try:
+            inner = last_attempt.exception()
+        except Exception:
+            return exc
+        if inner is None or id(inner) in seen:
+            return exc
+        seen.add(id(inner))
+        exc = inner
+
+
+def _http_status_of(exc: BaseException) -> Optional[int]:
+    """Statut HTTP porté par une exception requests/curl_cffi, si présent."""
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int):
+        return status
+    match = re.search(r"\b(\d{3}) (?:Client|Server) Error", str(exc))
+    return int(match.group(1)) if match else None
+
+
 def friendly_error(exc: BaseException) -> str:
     """Traduit une erreur technique de scraper en message affichable.
 
-    Les erreurs réseau brutes (SSL, timeouts, RetryError de tenacity…) sont
-    illisibles pour l'utilisateur final ; elles restent dans les logs.
+    Le message reste lisible, mais il se termine toujours par le détail
+    technique (type + message d'origine) : sans lui, impossible de
+    distinguer un 403 anti-robot d'une coupure réseau — les deux étaient
+    auparavant affichés « source injoignable ».
     """
-    text = str(exc)
+    real = unwrap_error(exc)
+    text = str(real)
     low = text.lower()
+    detail = f"{type(real).__name__} : {text}".strip()
+    if len(detail) > 220:
+        detail = f"{detail[:220]}…"
+    suffix = f" (Détail technique : {detail})"
+
+    status = _http_status_of(real)
+    if status in (401, 403, 429) or "forbidden" in low:
+        return (
+            "Accès refusé par le site (HTTP 403/429) : blocage anti-robot "
+            "probable. Réessayez plus tard, réduisez le nombre de résultats, "
+            "ou basculez sur une source API (Adzuna)." + suffix
+        )
+    if status is not None:
+        return f"Le site a répondu une erreur HTTP {status}." + suffix
+    if "certificate" in low or "certificat" in low:
+        return (
+            "Échec de vérification du certificat TLS : un antivirus ou un "
+            "proxy local intercepte probablement les connexions HTTPS. "
+            "Désactivez l'analyse HTTPS de l'antivirus ou testez depuis un "
+            "autre réseau." + suffix
+        )
+
     network_markers = (
         "ssl",
         "connection",
@@ -265,20 +321,55 @@ def friendly_error(exc: BaseException) -> str:
         "retryerror",
         "remote disconnected",
         "connection reset",
+        "curl: (",
     )
     if any(marker in low for marker in network_markers):
         return (
             "Source injoignable (le site n'a pas répondu). "
             "Depuis un aperçu hébergé, l'accès sortant aux jobboards peut "
             "être bloqué ; en exécution locale, vérifiez la connexion ou "
-            "un éventuel blocage anti-robot du site."
+            "un éventuel blocage du site (pare-feu, DNS filtrant type "
+            "Pi-hole, anti-robot qui coupe la connexion)." + suffix
         )
-    if "403" in text or "429" in text or "forbidden" in low:
-        return (
-            "Accès refusé par le site (HTTP 403/429) : blocage anti-robot "
-            "probable, réessayez plus tard ou réduisez le nombre de résultats."
-        )
-    return text if len(text) < 300 else f"{type(exc).__name__} : {text[:200]}…"
+    return text if len(text) < 300 else f"{type(real).__name__} : {text[:200]}…"
+
+
+def probe_sources(sources: Iterable[str]) -> Dict[str, Dict]:
+    """Teste chaque source par une mini-recherche réelle (1 offre max).
+
+    Contrairement à la recherche normale, les erreurs sont rendues **brutes**
+    (type + message d'origine, non traduites) : c'est l'outil de diagnostic
+    à consulter quand une source « ne marche pas » — on y voit le vrai
+    statut HTTP ou la vraie erreur réseau, par source.
+    """
+    criteria = SearchCriteria(keywords=["technicien"], location="France", max_results=1)
+    results: Dict[str, Dict] = {}
+    lock = threading.Lock()
+
+    def run(source: str) -> None:
+        started = time.monotonic()
+        entry: Dict = {"ok": False, "jobs": 0, "duration_ms": None, "error": None}
+        try:
+            with make_scraper(source) as scraper:
+                for _job in scraper.search(criteria):
+                    entry["jobs"] += 1
+                    break  # une seule offre suffit à prouver que ça répond
+            entry["ok"] = True
+        except Exception as exc:  # diagnostic : on veut l'erreur, pas la cacher
+            real = unwrap_error(exc)
+            entry["error"] = f"{type(real).__name__} : {real}"[:400]
+        entry["duration_ms"] = int((time.monotonic() - started) * 1000)
+        with lock:
+            results[source] = entry
+
+    threads = [
+        threading.Thread(target=run, args=(source,), daemon=True) for source in sources
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return results
 
 
 def iter_search_events(

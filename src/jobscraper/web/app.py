@@ -40,6 +40,7 @@ from jobscraper.models.job import (
     SortBy,
     WorkplaceType,
 )
+from jobscraper.scrapers.base import transport_name
 from jobscraper.services import search as search_service
 from jobscraper.services.apollo import (
     ApolloError,
@@ -100,6 +101,25 @@ def create_app() -> FastAPI:
     )
     def sources() -> List[search_service.SourceInfo]:
         return search_service.get_sources()
+
+    @app.get("/api/sources/test", tags=["meta"])
+    def sources_test(sources: str = "all") -> dict:
+        """Diagnostic : mini-recherche réelle par source, erreurs brutes.
+
+        À ouvrir dans le navigateur quand une source semble en panne : pour
+        chacune, on obtient soit la preuve qu'elle répond (1 offre), soit
+        l'erreur technique exacte (statut HTTP, SSL, DNS…) — sans la
+        traduction « aimable » appliquée dans l'interface de recherche.
+        ``?sources=hellowork,linkedin`` limite le test à certaines sources.
+        """
+        try:
+            resolved = search_service.resolve_sources(sources.split(","))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "transport": transport_name(),
+            "results": search_service.probe_sources(resolved),
+        }
 
     @app.post("/api/search", response_model=SearchResponse, tags=["search"])
     def search(request: SearchRequest) -> SearchResponse:

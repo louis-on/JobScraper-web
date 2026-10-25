@@ -215,6 +215,10 @@ export default function Prospecting({ sources, demoMode = false }) {
                   <li key={src}><strong>{src}</strong> — {message}</li>
                 ))}
               </ul>
+              <p>
+                🔍 <a href="/api/sources/test" target="_blank" rel="noreferrer">Diagnostic détaillé des sources</a>
+                {' '}(test réel par source, avec l'erreur technique exacte).
+              </p>
             </div>
           )}
           {revealError && <p className="global-error">⚠️ {revealError}</p>}

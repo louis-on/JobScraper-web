@@ -1,5 +1,7 @@
 # Core dependencies
 requests>=2.31.0
+# Imitation d'empreinte TLS Chrome (contourne la plupart des anti-robots)
+curl-cffi>=0.7
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 pydantic>=2.5.0

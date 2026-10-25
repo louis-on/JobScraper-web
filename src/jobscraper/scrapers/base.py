@@ -3,10 +3,51 @@
 from abc import ABC, abstractmethod
 from typing import AsyncIterator, Dict, Iterator, Optional
 
+import requests
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from jobscraper.models.job import JobOffer, SearchCriteria
+
+# Transport HTTP des scrapers HTML.
+#
+# Beaucoup de jobboards (HelloWork/DataDome, LinkedIn, France Travail…)
+# rejettent les requêtes dont l'empreinte TLS (JA3/JA4) ne ressemble pas à
+# celle d'un navigateur : avec `requests` seul, ils répondent 403 ou coupent
+# la connexion. `curl_cffi` imite l'empreinte d'un vrai Chrome et lève la
+# plupart de ces blocages. Le paquet est optionnel : s'il n'est pas installé,
+# on retombe sur `requests` classique (comportement historique).
+try:
+    from curl_cffi import requests as _cffi_requests
+except Exception:  # pragma: no cover - dépend de l'environnement
+    _cffi_requests = None
+
+#: Profil d'impersonation navigateur utilisé par curl_cffi.
+IMPERSONATE_PROFILE = "chrome"
+
+# Noms des erreurs réseau *transitoires* qui justifient une nouvelle tentative
+# (mêmes noms chez requests et chez curl_cffi, qui mime son API). Une erreur
+# HTTP (403, 404…) n'est volontairement PAS retentée : elle remonte tout de
+# suite, avec son vrai statut, au lieu d'être masquée après 3 essais.
+_TRANSIENT_ERROR_NAMES = {
+    "ConnectionError",
+    "ConnectTimeout",
+    "ReadTimeout",
+    "Timeout",
+    "DNSError",
+    "ChunkedEncodingError",
+}
+
+
+def _is_transient_network_error(exc: BaseException) -> bool:
+    return type(exc).__name__ in _TRANSIENT_ERROR_NAMES
+
+
+def transport_name() -> str:
+    """Nom du transport HTTP actif pour les scrapers HTML (diagnostic)."""
+    if _cffi_requests is not None:
+        return f"curl_cffi (impersonation {IMPERSONATE_PROFILE})"
+    return "requests (curl_cffi non installé)"
 
 
 class BaseScraper(ABC):
@@ -55,13 +96,40 @@ class BaseScraper(ABC):
         """
         pass
 
+    def _make_session(self):
+        """Crée une session HTTP (imitation Chrome si curl_cffi présent)."""
+        if _cffi_requests is not None:
+            return _cffi_requests.Session(impersonate=IMPERSONATE_PROFILE)
+        return requests.Session()
+
+    def _prepare_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+        """Adapte les en-têtes au transport utilisé.
+
+        Avec l'impersonation Chrome, curl_cffi fournit déjà un User-Agent et
+        un Accept-Encoding cohérents avec le profil émulé (et sait décoder le
+        Brotli) : renvoyer les nôtres créerait une empreinte incohérente, on
+        les retire donc. Sans curl_cffi, on garde tels quels les en-têtes du
+        scraper (qui n'annoncent jamais `br`, indécodable sans le paquet
+        `brotli`).
+        """
+        if _cffi_requests is None:
+            return headers
+        return {
+            k: v
+            for k, v in headers.items()
+            if k.lower() not in {"user-agent", "accept-encoding"}
+        }
+
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10)
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception(_is_transient_network_error),
+        reraise=True,
     )
     def _fetch_page(self, url: str) -> str:
         """
-        Récupère le contenu d'une page avec retry automatique.
+        Récupère le contenu d'une page (nouvelle tentative si erreur réseau
+        transitoire ; les erreurs HTTP remontent immédiatement).
 
         Args:
             url: URL de la page à récupérer
@@ -69,10 +137,13 @@ class BaseScraper(ABC):
         Returns:
             Contenu HTML de la page
         """
-        import requests
-
-        headers = self._get_headers()
-        response = requests.get(url, headers=headers, timeout=30)
+        headers = self._prepare_headers(self._get_headers())
+        if _cffi_requests is not None:
+            response = _cffi_requests.get(
+                url, headers=headers, timeout=30, impersonate=IMPERSONATE_PROFILE
+            )
+        else:
+            response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         return response.text
 
@@ -91,7 +162,9 @@ class BaseScraper(ABC):
             ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
+            # Jamais "br" ici : sans le paquet brotli, requests ne sait pas
+            # décoder les réponses Brotli que les sites enverraient alors.
+            "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive",
         }
 

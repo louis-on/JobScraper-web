@@ -48,14 +48,18 @@ class FranceTravailScraper(BaseScraper):
         # Session persistante : la pagination France Travail (« Afficher les
         # 20 offres suivantes ») est un événement d'une application à état
         # (Tapestry) qui s'appuie sur le cookie de session posé à la 1re requête.
-        # BaseScraper.close() fermera cette session.
-        self._session = requests.Session()
+        # BaseScraper.close() fermera cette session. La session imite Chrome
+        # (curl_cffi) quand le paquet est présent — FT bloque les empreintes
+        # TLS non-navigateur.
+        self._session = self._make_session()
 
     def _get_html(self, url: str) -> str:
         """Récupère une page via la session (cookies conservés entre pages)."""
         if self._session is None:  # session fermée puis scraper réutilisé
-            self._session = requests.Session()
-        response = self._session.get(url, headers=self._get_headers(), timeout=30)
+            self._session = self._make_session()
+        response = self._session.get(
+            url, headers=self._prepare_headers(self._get_headers()), timeout=30
+        )
         response.raise_for_status()
         return response.text
 

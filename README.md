@@ -51,6 +51,13 @@ par source, doublons inter-sources supprimés, résultats **streamés** dans le
 navigateur au fil du scraping. Voir [`docs/migration-web.md`](docs/migration-web.md)
 pour l'analyse et les choix d'architecture.
 
+Les scrapers HTML passent par **curl_cffi** (empreinte TLS d'un vrai Chrome),
+ce qui lève la plupart des blocages anti-robot des jobboards ; si le paquet
+est absent, `requests` est utilisé en repli. **Source en panne ?** Ouvrez
+<http://localhost:8000/api/sources/test> : chaque source y est testée par une
+mini-recherche réelle et l'erreur technique exacte y est affichée (statut
+HTTP, SSL, DNS…), sans le filtre « aimable » de l'interface.
+
 ```bash
 # 1. Installer le backend
 pip install -e ".[web]"
